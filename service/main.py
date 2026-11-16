@@ -3,7 +3,7 @@ from fastapi.responses import JSONResponse
 from models import AskLog, AskRequest, Question
 from sqlalchemy.orm import Session
 from database import SessionLocal
-
+import time
 import logging
 
 
@@ -62,6 +62,18 @@ async def ask(req: AskRequest,db:Session=Depends(get_db)):
 
 
 @app.get("/history")
-async def history():
-    logger.info("查询历史记录")
-    return []
+async def history(db:Session=Depends(get_db)):
+    start = time.perf_counter()
+    logger.info("查询历史记录：最近20条")
+
+    rows=(
+        db.query(AskLog).order_by(AskLog.created_at.desc()).limit(20).all()
+    )
+
+    cost=(time.perf_counter()-start)*1000
+    logger.info(f"返回{len(rows)}条，耗时{cost:.1f}ms")
+
+    return [
+        {"id":r.id, "question":r.question, "matched":r.matched, "created_at":r.created_at}
+        for r in rows
+    ]
