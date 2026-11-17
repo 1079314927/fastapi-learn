@@ -27,3 +27,4 @@ class AskLog(Base):
     question:Mapped[str]=mapped_column(Text,nullable=False)
     matched:Mapped[bool]=mapped_column(Boolean,nullable=False)
     created_at:Mapped[datetime]=mapped_column(DateTime,server_default=func.now())
+    request_id:Mapped[str|None]=mapped_column(String(64),unique=True)

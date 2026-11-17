@@ -7,7 +7,11 @@ import os
 DATABASE_URL = f"mysql+pymysql://root:{os.getenv('DB_PASSWORD')}@localhost:3306/tutor_ai?charset=utf8mb4"
 # 连库的地址，`+pymysql` 是驱动，`tutor_ai` 是建好的库。
 
-engine=create_engine(DATABASE_URL,echo=True)
+engine=create_engine(DATABASE_URL,
+                     echo=True,
+                     connect_args={"connect_timeout":5},
+                     pool_timeout=5
+                     )
 # engine：总管。`echo=True` 的意思是它发的每条 SQL 都打印到终端，学习时很有用，能看到 ORM 到底在背后干了什么。
 
 SessionLocal=sessionmaker(bind=engine,autoflush=False)
