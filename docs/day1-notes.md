@@ -988,3 +988,140 @@ ValueError: Formatting field not found in record: 'request_id'
 ### 下一批（第 13 天起）要做的事
 
 按清单口径：**pytest 接口自动化，20+ 用例**，覆盖正常 / 缺参 / 非法输入 / 越界 / 服务异常；顺便给超时、重试、幂等各补用例（`is_retryable` 的判定、`retry_call` 的次数、幂等命中不重复落库）。可以看黑马教程里 pytest 那部分，或者直接看 pytest 官方文档。
+## 第 13—14 天：pytest 起步与 fixture 进阶
+
+### 今天做了什么
+
+- 第 13 天：装上 pytest 9.2.0 / requests 2.34.2，`tests/test_health.py` 第一条用例跑通，`conftest.py` 里的 `base_url` fixture 用上，`1 passed`。
+- 第 14 天：`conftest.py` 加了三个东西 —— `server`（session 级，`subprocess.Popen` 起 uvicorn + 探针等就绪 + `terminate`/`wait` 收尾）、`base_url(server)`（地址唯一来源）、`api_client`（`ApiClient` 类包 `Session`，自动拼地址、补默认 `timeout=10`、`close()` 关连接）。
+- 之后的测试不再需要手动起服务：一条 `python -m pytest tests/ -v` 自己起、自己关。
+
+### fixture 的执行顺序（一次 pytest 的全过程）
+
+```text
+① 用例被点名（如 def test_health_via_client(api_client)）
+② 挖依赖：api_client → base_url → server（依赖是往里挖的，执行是从里往外）
+③ server：起 uvicorn + 探针轮询 /health 等就绪
+④ base_url：给出 "http://127.0.0.1:8000"
+⑤ api_client：用地址造 ApiClient 实例（内部造 requests.Session）
+⑥ 用例：api_client.get("/health") —— ApiClient 补超时、拼地址，Session 真正发请求
+⑦ 断言：status_code / json()
+⑧ api_client.close()：关 Session，连接释放
+⑨ server.terminate() + proc.wait()：服务退出
+```
+
+**拆除顺序是“后建先清”**：先关客户端，再杀服务进程 —— 客人先出门，店员再锁门。反了会留下“对端已消失”的连接，`close()` 时冒 warning。
+
+**多条用例时**：`server` / `base_url` / `api_client` 整轮各只建 1 次（`scope="session"`），用例共用同一个客户端与服务。
+
+### 这几天的关键实现要点
+
+| 要点 | 说明 |
+|---|---|
+| `sys.executable` 起服务 | 保证服务和测试同一个解释器，避开 base 环境没有 uvicorn 的坑 |
+| `cwd=SERVICE_DIR` | 服务必须在 `service\` 下起，否则 `Could not import module "main"` |
+| 探针而不是 `sleep` | 反复请求 `/health` 直到通，通了就走，上限 20 秒报 `RuntimeError`；只看状态不看时间 |
+| 只捕 `requests.ConnectionError` | 端口未监听才是“还没好”；返回 500 是真 bug，不能吞掉 |
+| 探针失败先 `proc.terminate()` | 否则起不来的进程留着占 8000，下次必撞端口 |
+| `stdout=/stderr=DEVNULL` | 服务日志不灌进 pytest 输出，排错时临时改成文件 |
+| `base_url` 依赖 `server` | 用例只写 `base_url` / `api_client`，服务就能被顺带拉起（fixture 只有被点名才执行） |
+| `Session` 自己关 | `requests.get` 靠内部 `with` 自动关；`Session` 是我们造的，要在 `yield` 后面 `close()` |
+| `kwargs.setdefault("timeout", 10)` | 不传用 10，传了听调用方（第 16 天测超时要传小值） |
+
+### 今天问过的疑问（速查）
+
+- fixture 和普通函数有什么区别 —— 普通函数自己调；fixture 在参数里点名就自动执行、返回值注入
+- 如果 base_url 只是普通函数怎么写 —— 要 `from utils import base_url` 再 `url = base_url()`，还得放 conftest 之外或照旧 import
+- 普通函数放 conftest 里还要 import 吗 —— 需要；conftest 的“免 import”是给 fixture 的
+- 为什么不能一直手动起服务 —— 能，且调试时更好（看得见日志）；但 CI 里没人手动起，且忘了开会二十条全红
+- 为什么等就绪不能 `sleep` —— 猜时间，慢机器不够、快机器白等，结果时好时坏最致命
+- `subprocess` / `Popen` 是什么 —— 标准库模块 + 里面的类，起子进程后立刻返回一个“遥控器”，不等你
+- `Session` 谁关 —— 我们自己关，在 fixture 的 `yield` 后面调 `close()`
+- `Session` 能反复用是不是 fixture 给的能力 —— 不是；能发无限次请求是它自身的本事，fixture 的 `scope` 只决定“造几个、活多久”
+- `self.session.get` 是不是调用自己 —— 不是；`self.get` 才是调自己（会 `RecursionError`），`self.session` 属于 `requests.Session`
+- 把 `r` 从 fixture `yield` 出去行不行 —— 能交出去，但只对应一次请求，二十条用例没法各自断言
+- 探针写了 `/health` 会不会让 `server` 只能给 health 用 —— 不会；探针是内部摸底、响应丢掉，`yield` 出去的是空
+- `s.get("/health")` 为什么不行 —— 缺协议与主机，`requests` 报 `MissingSchema`；`Session` 不会替你拼地址
+- 用例参数不写 `server` 怎么知道调 fixture —— 按参数名匹配同名 fixture，依赖链逐层传递
+- `python pytest /tests -v` 对吗 —— 不对，是 `python -m pytest tests/ -v`
+
+### 今天真正记住的几件事
+
+- **fixture 需要被点名才会执行**，所以 `base_url(server)` 这种依赖链是“把服务拉进每条用例”的正规手段
+- **fixture 给通用能力，用例发具体请求**——把某次响应 `yield` 出去，fixture 就退化成一次性的
+- **不问时间问状态**：探针通了就走，比 `sleep` 稳得多
+- **`requests.get` 是临时叫车，`Session` 是包车**；地址该写完整还是得写完整，`api_client` 才替换掉拼接
+- **建是顺着依赖往里，拆是逆序往外**
+
+## 第 15 天（2026-11-19）：正常 + 缺参 + 非法输入用例
+
+结果：`tests/test_ask_normal.py`（3 条）、`tests/test_ask_missing.py`（3 条）、`tests/test_ask_invalid.py`（5 条）落地，全套 **13 passed in 2.08s**（含 health 2 条）。仍**未提交**，随 day16 一起由本人 commit。
+
+### 先跑真值，再写断言
+
+写用例之前用一次性脚本打了一遍 `/ask` 的所有分支，得到的“标准答案表”：
+
+| 输入 | 状态码 | 响应体要点 | 谁拦的 |
+|---|---|---|---|
+| `{}` | 422 | `detail[0].type="missing"`, `loc=["body","question"]` | Pydantic |
+| `{"question": null}` | 422 | `type="string_type"` | Pydantic |
+| 完全不传 body | 422 | `loc=["body"]` | Pydantic |
+| `{"question": 123}` / `["a"]` | 422 | `type="string_type"` | Pydantic |
+| `""` / `"   "` | 400 | `{"error":"question不能为空"}` | 业务代码 `strip()` |
+| `"直"*10000`（及 4999/5000/5001） | 200 | `matched:false` | **没人拦（缺口）** |
+
+结论：**422 和 400 的区别不是“参数错没错”，而是“谁拦的”** —— 框架管“有没有 / 是不是 str”，业务代码管“str 里有没有实际内容”。
+
+### 三层结构（Response → body → detail → 条目）
+
+```text
+r.status_code        ← 响应第一行（状态码）
+r.json()             ← 响应体（dict）
+  ["detail"]         ← list（可能装多条错误）
+    [0]              ← dict（第 1 条错误）
+      ["type"]       ← str："missing" / "string_type"
+      ["loc"]        ← list：["body","question"] 或 ["body"]
+```
+
+取值规则一句话：**上一步拿到 `{` 就写 `["键名"]`，拿到 `[` 就写 `[0]`**。400 的响应体只有 `error` 一个键，所以直接整体比较 `r.json() == {"error": ...}`，不用套 `[0]`。
+
+### 用例落地时踩的坑（都是本人写出来的，已修正）
+
+| 坑 | 现象 | 正确写法 |
+|---|---|---|
+| `header="X-Request-ID":"..."` | 语法错，`ERROR collecting` | `headers={"X-Request-ID": "..."}` |
+| `r.type` / `r.loc` | `AttributeError`，Response 没这些属性 | 先 `detail = r.json()["detail"]` 再取 |
+| `r.json()["type"]` | `KeyError: 'type'` | `type` 藏在 `detail[0]` 里 |
+| `detail = r.json()` 少了 `["detail"]` | `KeyError: 0` | `detail = r.json()["detail"]` |
+| `assert body["mathed"]` | `KeyError: 'mathed'` | `matched` |
+| 少写 `assert`（只写 `r.json()== {...}`） | **永远 PASS，用例假绿** | 每一条都必须以 `assert` 开头 |
+| 三条用例都用“直角三角形” | `assert True is False` | 未命中用例必须用题库里没有的题 |
+| 三条用例同名 | 前一条被覆盖，只收集 4 条 | 函数名不得重复 |
+
+### 今天问过的疑问（速查）
+
+- `body["answer"]` 是键值对吗 —— 不是，`body` 才是字典；`["answer"]` 是“按标签取出那格的值”
+- Pydantic 是什么 —— 按类型声明自动校验/转换的库，FastAPI 内置用它；422 是它的检查结果
+- 422 的那些行是被 `AskRequest` 拦的吗 —— 是，`question: str` 就是检查单
+- `r` 里有什么 —— 属性 `status_code / text / content / headers / url / elapsed`，方法 `json() / raise_for_status()`
+- `json()` 里有什么 —— 由接口决定：health 是 1 键，命中 4 键，未命中 2 键
+- 能不能写 `r.json()["type"]` —— 不行，最外层只有 `detail`，`type` 在 `detail[0]` 里
+- 为什么是 `detail[0]["loc"]` 而不是 `detail["loc"]` —— `detail` 是 list，只能按位置取
+- 响应长什么样想不出来 —— 逐层打印后：`dict → list → dict → str`
+- 400 是我们自己设的，为什么也在 `r` 里 —— `r` 读的是服务端写在响应第一行的数字，谁写都一样
+- 连接成功后状态码原本 200，被手动改成 400？ —— 错。连接成功 ≠ 200；400 是服务端答复“内容不合格”
+- `422` 算连接失败吗 —— 不算。连接失败表现为抛 `ConnectionError`（没有 `r`）；422 是连上了但格式不合格
+- 200 我没设置，怎么也出现 —— FastAPI 默认值（正常 `return` 就给 200，可用 `status_code=` 覆盖）
+- 状态码在响应体里吗 —— 不在，在第一行状态行；`r.status_code` 读状态行，`r.json()` 读空行下面的 body
+- 空格也算连接失败吗 —— 不算，空格走完整个请求，返回 400 是业务拒绝
+- `{"question": "直"*10000}` 是什么 —— Python 字符串乘法，造一万字符的超长输入，用来探长度上限
+- 为什么先断言 200 而不是 400（超长那条） —— 现状没有上限，先“锁现状”+ 记 TODO；改服务要动 `main.py`，本批不动
+
+### 今天真正记住的几件事
+
+- **断言值必须实测得来，不能推断**——“表格里 400，所以是 400”这种推法会红
+- **按“谁拦的”给用例分组**：422 一组（框架），400 一组（业务），200 一组（缺口）
+- **信封与信纸要分清**：`r` 是信封（status/headers/url），`r.json()` 是信纸（内容）
+- **没有 `assert` 的测试等于没测试**；`r.json()=={...}` 这种写法永远假绿
+- **断言要服务它验证的分支**：未命中用例必须用未命中的输入
+- 超长无上限是**真实缺口**，面试能讲：“同一参数错误我项目里有 400 和 422 两条路径，是契约分裂”
