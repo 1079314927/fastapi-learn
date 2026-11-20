@@ -54,6 +54,7 @@ def test_retry_gives_up_after_max_attempts(caplog):
             "SELECT 1", {},
             Exception(2003, "Can't connect to MySQL server")
         )
+    
     with pytest.raises(OperationalError):#执行下面那句，我预期它抛出 `OperationalError`。”
         retry_call(always, max_retries=2, delay=0)
 

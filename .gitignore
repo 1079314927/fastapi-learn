@@ -15,5 +15,8 @@ env/
 .mypy_cache/
 .ipynb_checkpoints/
 
+# 测试报告生成物（allure 每次跑都会重写，含参数原文，体积大）
+report/
+
 # 本地环境变量文件
 .env

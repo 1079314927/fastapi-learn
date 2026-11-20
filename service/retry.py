@@ -15,7 +15,8 @@ def is_retryable(exc):
     return False
 
 #尝试使用密码登录数据库
-def retry_call(fn,max_retries=2,delay=0.5):
+#main.py的do_query使用了这个循环
+def retry_call(fn,max_retries=2,delay=0.5):#`fn` 只是**占位名**，意思是 “这里要放一个函数”
     for attempt in range(max_retries+1):
         try:
             return fn()

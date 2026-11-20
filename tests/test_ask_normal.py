@@ -28,7 +28,7 @@ def test_ask_special_chars(api_client):
     assert r.status_code == 200 
     body = r.json()
     assert "matched" in body
-    assert isinstance(body["matched"], bool)
+    assert body["matched"] is False#按整串去比对，不分词,结果必然是 `matched: False`
 
 
 def test_history(api_client):
