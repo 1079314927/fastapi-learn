@@ -1,4 +1,4 @@
-import pytest,subprocess,sys,time,requests
+import pytest,subprocess,sys,time,requests,os
 
 
 from service.database import SessionLocal
@@ -25,7 +25,7 @@ class ApiClient:
         self.session.close()
 
 
-#启动服务器
+#启动服务器并判断数据库能否连接（此时没用密码尝试登录数据库）
 @pytest.fixture(scope="session")
 def server():
     proc=subprocess.Popen([sys.executable,"-m","uvicorn","main:app","--port","8000"],
@@ -66,3 +66,32 @@ def clean_ask_logs():
     db.commit()
     db.close()
     yield
+
+
+new_BASE = "http://127.0.0.1:8001"
+@pytest.fixture(scope="session")
+def bad_db_server():
+    proc=subprocess.Popen([sys.executable,"-m","uvicorn","main:app","--port","8001"],
+                          cwd=SERVICE_DIR,
+                          env={**os.environ, "DB_PASSWORD": "wrong_password"},
+                          stdout=subprocess.DEVNULL,
+                          stderr=subprocess.DEVNULL,)
+
+    for _ in range(100):
+        try:
+            requests.get(f"{new_BASE}/health", timeout=1)
+            break
+        except requests.ConnectionError:
+            time.sleep(0.2)
+    else:
+        proc.terminate()
+        raise RuntimeError("服务器20秒内没起来")
+    yield new_BASE
+    proc.terminate()
+    proc.wait(timeout=10)
+
+@pytest.fixture(scope="session")
+def bad_api_client(bad_db_server):
+    c=ApiClient(bad_db_server)
+    yield c
+    c.close()

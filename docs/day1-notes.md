@@ -1125,3 +1125,117 @@ r.json()             ← 响应体（dict）
 - **没有 `assert` 的测试等于没测试**；`r.json()=={...}` 这种写法永远假绿
 - **断言要服务它验证的分支**：未命中用例必须用未命中的输入
 - 超长无上限是**真实缺口**，面试能讲：“同一参数错误我项目里有 400 和 422 两条路径，是契约分裂”
+
+---
+
+## 第 16 天（2026-11-20）：越界 + 服务异常 + 幂等 + 重试单元
+
+结果：`tests/test_ask_boundary.py`（3）、`tests/test_ask_server_error.py`（3）、`tests/test_ask_idempotency.py`（3）、`tests/test_retry_unit.py`（2），加 `test_ask_normal.py` 补的 `/history` 1 条，共 **12 条新增**，全套 **25 passed in 4.18s**。全部由本人从零写，助手只做讲解与核对。**尚未提交**。
+
+### 这一天的核心：同一个故障，两层看法
+
+`/ask` 在数据库密码错误时会返回 500。要测它，有两条路：
+
+| 层 | 在哪 | 看什么 | 优点 | 缺点 |
+|---|---|---|---|---|
+| 接口层 | `test_ask_server_error.py` | 状态码、正文、耗时 | 端到端真实 | 只看得到「后果」，看不到内部怎么处理 |
+| 单元层 | `test_retry_unit.py` | 调用次数、日志条数 | 精确 | 得造假函数 |
+
+**只测接口层，证明不了「它重试了 2 次才放弃」** —— 因为返回 500 也可能是第一次就放弃了。补 2 条单元测试，才把「重试次数」钉死。
+
+这就是「分层」的实际理由，不是教科书上的说法。
+
+### `bad_db_server`：怎么造一台「连不上库」的服务
+
+```python
+subprocess.Popen([sys.executable, "-m", "uvicorn", "main:app", "--port", "8001"],
+                 cwd=SERVICE_DIR,
+                 env={**os.environ, "DB_PASSWORD": "wrong_password"})
+```
+
+两个关键：
+
+- **`env={**os.environ, "DB_PASSWORD": ...}`** —— 必须先把 `os.environ` 整个抄过来再覆盖一个键。只写 `{"DB_PASSWORD": ...}` 会丢掉 PATH 等变量，进程直接起不来
+- **端口 8001** —— 不和日常的 8000 撞
+
+`database.py:7` 的 `os.getenv("DB_PASSWORD")` 在 **import 时**执行，所以这个错密码必须在进程启动那一刻就生效。
+
+### 最严重的一个坑：fixture 同名，pytest 静默覆盖
+
+写服务异常用例时，新 fixture 被写成 `api_client(bad_db_server)`，而不是 `bad_api_client`。实测结果：
+
+```
+7 failed, 9 passed, 3 errors in 8.27s
+```
+
+- 7 条原本通过的用例全部变 500 —— 它们用的 `api_client` 被换成了「连 8001 坏库」的版本
+- 3 条新用例报 `fixture 'bad_api_client' not found`
+
+**pytest 对同名 fixture 既不报错也不警告，直接后一个覆盖前一个。** 这和「两条同名用例，后一条吞掉前一条」是同一条规则。
+
+改成 `def bad_api_client(bad_db_server)` 后恢复 19 passed。
+
+### 2003 和 1045 是两步，不是一回事
+
+「连数据库」其实是两件事：
+
+| 情况 | 错误码 | 发生了什么 | 每次耗时 |
+|---|---|---|---|
+| 端口不通 / 服务没起 | **2003** | TCP 连不上，客户端干等 | 约 **2.05 秒** |
+| 密码错 | **1045** | TCP 已连上，MySQL 立刻回「密码不对」 | 几十毫秒 |
+
+实测 2003 三次：2.0953 / 2.0545 / 2.0563 秒（换成真密码测也是 2.04—2.07 秒，全是 2003，因为服务当时没起）。
+
+**这决定了 `elapsed < 6` 到底守什么**：它守「有没有发生一次真正的干等」——2003 会重试 3 次约 7.2 秒，抓得住；1045 是 3 次 + delay ≈ 1.1 秒，抓不住。
+
+而且**超时是上限，不是固定值**：`connect_timeout=5` 的意思是「最多等 5 秒」，不是「一定等 5 秒」。
+
+### 重试单元测试的三个零件
+
+1. **闭包计数器** `calls = {"n": 0}` —— 用字典不用普通变量，省掉 `nonlocal`
+2. **`pytest.raises(OperationalError)`** —— 预期抛异常的容器，同时断言异常类型
+3. **`caplog`** —— pytest 自带 fixture，把日志变成可断言的数据
+
+两条用例的断言：
+
+| | 第一条（`flaky`） | 第二条（`always`） |
+|---|---|---|
+| 返回值 | `== "OK"` | 抛出 `OperationalError`（由 `with` 断言） |
+| 调用次数 | `calls["n"] == 2` | `calls["n"] == 3` |
+| 重试日志 | `"次重试"` 1 条 | `"次重试"` 2 条 |
+| 放弃日志 | 无 `"最终失败"` | 有 `"最终失败"` |
+
+**`delay=0` 必须传**：默认是 0.5，第一条等 0.5 秒、第二条等 1 秒，合计 1.5 秒纯等待，什么都没验证。实际两条用例跑完只花 **0.10 秒**。
+
+**计数器的坑**：如果 `calls` 和假函数写在文件最外层，两条用例会共用同一个计数器 —— 第一条跑完是 2，第二条从 3 开始数，`assert calls["n"] == 3` 永远失败。所以**必须写在用例函数体内**，靠闭包各自持有。
+
+### `/history` 那条用例的三个新点
+
+1. **返回的是列表**（`[{...}, {...}]`），不是字典。`body["question"]` 会 `TypeError`，要 `body[0]["question"]`
+2. **不带 `request_id`**，只有 `id / question / matched / created_at` 四个字段 → 不能用请求头认领，只能用 `question` 文字认领
+3. **只返回最近 20 条**（`limit(20)` + `created_at desc`）→ 不能断言总条数
+
+### 今天问过的疑问（速查）
+
+- `always` 为什么能直接填进 `fn` 参数 —— 函数名本身是一个值；`always` 是「派过去」，`always()` 是「现在就干」
+- `retry_call` 的重试循环怎么实现 —— `for attempt in range(max_retries+1)`，`max_retries=2` 是「再试 2 次」，总共调 3 次
+- `always` 是什么函数 —— 测试里自己造的假函数，模拟永远失败的查库
+- `OperationalError("SELECT 1", {}, ...)` 前两个参数是什么 —— 假 SQL 和空参数字典，`is_retryable` 只看第三个的 `.args[0]`
+- `delay=0` 为什么要设 0 —— 测的是重试次数不是等待时长；默认值不可见，显式写才看得见
+- 为什么显示 `retry_call` 找不到 —— 没写 `from service.retry import retry_call`
+- 不写 `with pytest.raises` 会怎样 —— 异常直接把用例截断，后面的断言全不跑，报错还长得像自己写错了 bug
+- `flaky` 第一次报错，哪来的循环让它第二次成功 —— 循环在 `retry_call` 里，`try` 写在循环内部，`flaky` 只是被反复调用
+- `return fn()` 的 `return` 执行了吗 —— 没有；`fn()` 抛异常时 `return` 根本没开始
+- `caplog` 有几个属性 —— 10 个成员，常用三个：`set_level` / `messages` / `records`
+- `body["question"]` 报 TypeError 为什么 —— `/history` 返回的是 list，要 `body[0]["question"]`
+- 最后那条字段断言有没有必要 —— 属契约检查，可留可删；但留就必须有 `assert`
+
+### 今天真正记住的几件事
+
+- **pytest 的静默覆盖有两处**：同名 fixture、同名用例。都不报错，后一个吃掉前一个
+- **连上 ≠ 登录成功**：2003 是干等 2 秒，1045 是立刻回话；`elapsed<6` 抓前者抓不到后者
+- **超时是上限，不是固定值**
+- **接口层看后果，单元层数次数**：要证明「重试了 2 次」，只能数日志
+- **`delay=0` 要显式写**，因为默认值藏在代码里，排查「为什么慢」时最容易想不到它
+- **没有 `assert` 的比较等于没测**（第 47 行真实踩到，详见疑惑记录「十三」）
+- **`/history` 拿不到 `request_id`**，只能靠 `question` 文字认领自己的记录

@@ -14,6 +14,7 @@ def is_retryable(exc):
         return exc.orig.args[0] in RETRYABLE_CODES
     return False
 
+#尝试使用密码登录数据库
 def retry_call(fn,max_retries=2,delay=0.5):
     for attempt in range(max_retries+1):
         try:
