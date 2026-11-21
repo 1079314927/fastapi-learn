@@ -1,0 +1,61 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    env:
+      DB_PASSWORD: test_password
+
+    services:
+      mysql:
+        image: mysql:8
+        env:
+          MYSQL_ROOT_PASSWORD: test_password
+          MYSQL_DATABASE: tutor_ai
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Check MySQL connection
+        run: |
+          python -c "import pymysql; pymysql.connect(host='127.0.0.1', user='root', password='test_password', database='tutor_ai', charset='utf8mb4').close(); print('MySQL OK')"
+
+      - name: Init DB
+        working-directory: service
+        run: python init_db.py
+
+      - name: Seed DB
+        working-directory: service
+        run: python seed.py
+
+      - name: Run tests
+        run: python -m pytest tests -q -p no:cacheprovider --alluredir=report
+
+      - name: Upload allure results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: allure-results
+          path: report/
