@@ -103,9 +103,16 @@ async def history(db:Session=Depends(get_db),x_request_id:str|None=Header(defaul
     start = time.perf_counter()
     request_id=x_request_id or uuid.uuid4().hex
 
-    rows=(
-        db.query(AskLog).order_by(AskLog.created_at.desc()).limit(20).all()
-    )
+    try:
+        rows=(
+            db.query(AskLog).order_by(AskLog.created_at.desc()).limit(20).all()
+        )
+    except Exception as exc:
+        logger.error(json.dumps({"msg": "查询历史失败，数据库不可用", "request_id": request_id,
+                                 "path": "/history", "method": "GET",
+                                 "duration_ms": round((time.perf_counter()-start)*1000, 1),
+                                 "status": "db_error", "error": str(exc)}, ensure_ascii=False))
+        return JSONResponse(status_code=500, content={"error": "数据库不可用"})
 
     logger.info(json.dumps({"msg": "查询历史记录：最近20条", "request_id": request_id,
                             "path": "/history", "method": "GET", "count": len(rows),
