@@ -1,10 +1,11 @@
 import pytest,subprocess,sys,time,requests,os
+from pathlib import Path
 
 
 from service.database import SessionLocal
 from service.models import AskLog
 
-SERVICE_DIR = r"D:\Code\fastapi-learn\service"
+SERVICE_DIR = Path(__file__).resolve().parent.parent/"service"
 BASE = "http://127.0.0.1:8000"
 
 
