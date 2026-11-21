@@ -20,3 +20,8 @@ report/
 
 # 本地环境变量文件
 .env
+
+.vscode/
+*.log
+Thumbs.db
+desktop.ini
