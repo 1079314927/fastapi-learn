@@ -66,8 +66,15 @@ async def ask(req: AskRequest,db:Session=Depends(get_db),
     keyword=req.question.strip()
     def do_query():
         return db.query(Question).filter(Question.question.contains(keyword)).first()
-    row=retry_call(do_query)
-    
+    try:
+        row=retry_call(do_query)
+    except Exception as exc:
+        logger.error(json.dumps({"msg": "查询题库失败，数据库不可用", "request_id": request_id,
+                                 "path": "/ask", "method": "POST",
+                                 "duration_ms": round((time.perf_counter()-start)*1000, 1),
+                                 "status": "db_error", "error": str(exc)}, ensure_ascii=False))
+        return JSONResponse(status_code=500, content={"error": "数据库不可用"})
+
     matched = row is not None
 
     db.add(AskLog(question=req.question,matched=matched,request_id=request_id))
