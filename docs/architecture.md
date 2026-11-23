@@ -9,7 +9,7 @@
 路由层   service/main.py
   │  调用
   ▼
-服务层   service/service.py        ← 待建，逻辑暂时还在 main.py
+服务层   service/service.py        ← 待拆，逻辑暂时还在 main.py
   │  读写
   ▼
 数据层   MySQL 库 tutor_ai（service/database.py）
@@ -22,7 +22,7 @@
 负责：收请求、校验参数、把结果打包回话。
 不负责：算答案、存数据。
 
-**服务层（service/service.py，待建）**
+**服务层（service/service.py，待拆）**
 负责：算逻辑——拼答案、走判断、以后调 AI 模型。
 不负责：收请求（它不知道 HTTP 长什么样）。
 
@@ -31,7 +31,7 @@
 现状：库 `tutor_ai`（utf8mb4），两张表：
 
 - `questions`（题库，5 条）：`id` / `question` / `knowledge_point` / `steps` / `common_mistake` / `created_at`
-- `ask_logs`（提问记录）：`id` / `question` / `matched` / `created_at`
+- `ask_logs`（提问记录）：`id` / `question` / `matched` / `request_id`（唯一索引）/ `created_at`
 
 连接配置在 `service/database.py`（`engine` + `SessionLocal`，密码读环境变量 `DB_PASSWORD`），表结构的 Python 写法在 `service/models.py`（`Base` / `Question` / `AskLog`）。
 
