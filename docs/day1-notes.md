@@ -520,7 +520,11 @@ except urllib.error.HTTPError as e:
 
 **为什么 `import database` 不会执行两遍：** Python 把载入过的模块存在 `sys.modules` 里，第二次 `import` 直接取缓存。
 
-**顺带一条衔接：** 这个手法就是 pytest 里 `monkeypatch.setattr(...)` 干的事。第 13 天给"服务异常"写用例时，用的是同一招，只是换成官方写法。
+**顺带一条衔接，但这里要说清界限：** 这个手法在**脚本里**成立——因为脚本是自己控制 `import database` 和 `import main` 的先后。搬进 pytest 就不成立：`conftest.py` 顶部已经把 `main` 导进来了，`main` 里的 `SessionLocal` 早绑成了旧对象，再 `monkeypatch.setattr(database, "SessionLocal", ...)` 改不到它。真要在 pytest 里做，得 patch `main.SessionLocal`，或者另起一个干净进程。
+
+所以第 13 天写「服务异常」用例时**没有用 monkeypatch**：改成 `subprocess.Popen` 起 8001、`DB_PASSWORD=wrong_password`，让 MySQL 回 1045。那验的是 fail-fast，不是超时；超时那条至今没进用例——见 `test-design.md` 4.3 的欠账。
+
+**一句话记牢**：猴子补丁要打在「名字被 lookup 的那个命名空间」，`from database import SessionLocal` 一执行，`main` 里就有了一份自己的引用，改 `database` 那份影响不到它。
 
 ### 今天真正记住的几件事
 
@@ -1581,6 +1585,7 @@ SERVICE_DIR = Path(__file__).resolve().parent.parent / "service"
 - 「progress 跟 day1 重复吗」——不重复：一个是一页快照，一个是按天日志
 - 「License 不管了行不行」——可以，但不能裸写一个 MIT 而仓库里没有文件
 - 「真实返回要不要截图」——不要，要文本；截图贴不进 README
+- 「反复跑 seed 会不会把题库插重复」——会，`seed.py` 没有查重，跑一次插五条
 
 ### 今天真正记住的几件事
 
@@ -1589,3 +1594,4 @@ SERVICE_DIR = Path(__file__).resolve().parent.parent / "service"
 - **验证要在「干净的壳」里做**：同一条命令，在 PowerShell 5.1 里是坏的，在 curl 里是好的
 - **幂等键是「一次逻辑请求」的身份证**，不是随手起的名字；重用一个 ID，会把旧结果当成新的
 - **文档之间会打架**——改 README 里一句话，就得回头查 `architecture.md` 有没有在说同一件事
+- **初始化脚本要可重复跑**——`seed.py` 跑一次插五条、跑三次插十五条的教训；一个「初始化」脚本跑第二遍就该什么都不做，否则脏数据会用最安静的方式长出来
