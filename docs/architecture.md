@@ -6,15 +6,17 @@
 调用方（浏览器 / 测试脚本）
   │  HTTP 请求
   ▼
-路由层   service/main.py
+路由层   service/main.py        ──→ 结构化日志
   │  调用
   ▼
-服务层   service/service.py        ← 待拆，逻辑暂时还在 main.py
+服务层   service/service.py     ──→ 日志（拆分后补）    ← 待拆，逻辑暂时还在 main.py
   │  读写
   ▼
-数据层   MySQL 库 tutor_ai（service/database.py）
+数据层   MySQL 库 tutor_ai      ──→ echo=True 打印 SQL
         表 questions / ask_logs（service/models.py 映射）
 ```
+
+日志层是**旁挂**的，不是并列的第四层：它不处理请求，只是每一层都在往外吐——所以画在右边，不画在下面。
 
 ## 二、每层职责
 
