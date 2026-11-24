@@ -1760,3 +1760,90 @@ SERVICE_DIR = Path(__file__).resolve().parent.parent / "service"
 - **缓存挡先后、挡不住同时**——并发同 id 会漏到数据库，靠唯一约束兜，兜住的方式是 500
 - **写复盘最容易犯的错是抄自己的旧说法**，旧说法错一次会一路复制下去
 - **同一套代码可以有两套 import 口径**，靠「在哪个目录跑」切换：`python -m` 把 cwd 放进 `sys.path`，脚本模式放的是脚本所在目录
+
+---
+
+## 第 22 天（2026-11-24）：阶段二开工，第一颗钉子钉进去了
+
+> 阶段一已冻结（tag `v0.1-stage1-done`）。阶段二只新增 `eval/`，不碰 `service/`。
+
+### 第一层：今天的任务
+
+清单第 22 天两步：①选定一个 LLM API、key 存环境变量、跑通一次调用；②读三篇基础材料，写 `docs/ai-eval-notes.md`。
+
+### 第二层：实际做完的
+
+1. **选型**：被测用 DeepSeek（`deepseek-chat`），Judge 暂定智谱 `glm-4-flash`（还没注册，等第一条链路稳了再开）
+2. **注册踩了一个坑**：第一次拿到的 key 直接贴进了聊天框，等于公开。发现后去控制台删掉、重建了一个。教训记在下面
+3. **存环境变量**：`setx LLM_API_KEY "..."`（用户级），关掉终端重开，用 `if ($env:LLM_API_KEY.Length -gt 20) { "已设置" }` 验证，只报长度不打印值
+4. **写了一个 26 行的验证脚本**，跑通：返回 `200` 和 `1+1=2`
+5. **写了 `docs/ai-eval-notes.md`**：三问（Judge 原理与偏差 / 语义 vs 字符串 / 六维度判分方式）
+
+### 第三层：代码（「外部模型调通了」的证据）
+
+`eval/test_LLM.py`，一次性的验证脚本，不进版本库：
+
+```python
+import os, requests
+
+key = os.getenv("LLM_API_KEY")
+
+header = {
+    "Authorization": f"Bearer {key}",
+    "Content-Type": "application/json",
+}
+
+BASE = "https://api.deepseek.com/chat/completions"
+r = requests.post(
+    BASE,
+    headers=header,
+    json={
+        "model": "deepseek-chat",
+        "messages": [{"role": "user", "content": "1+1=?"}]
+    },
+    timeout=30
+)
+
+print(r.status_code)
+print(r.json()["choices"][0]["message"]["content"])
+```
+
+实跑输出：
+
+```
+200
+1+1=2
+```
+
+这一行的意义：从今天起手上有了一个「能被程序自动化调用的答题者」，后面六个维度才有对象可测。
+
+### 第四层：三处最容易记错的
+
+1. **角色反转**。阶段一是自己开店（FastAPI 等别人来调），今天是当客人（`requests` 去调 DeepSeek）。写这段时第一版还写成了 `@app.post("/test_llm")`，方向整个反了。
+2. **headers 和 json 是两个参数**。headers 说「怎么送」（认证、内容类型），json 说「送什么」（model、messages）。第一版把 model 和 messages 塞进了 headers，等于把包裹里的东西写在了箱子标签上。
+3. **`setx` 写完必须重开终端**。它写进注册表，已经开着的进程读不到，`$env:LLM_API_KEY` 还是空。
+
+### 第五层：默写了一遍，漏的全是「连接件」
+
+跑通之后脱稿默写，错了三处：
+
+- `key.os.getenv(...)` —— 把赋值写成了属性访问，`os` 是模块不是 `key` 的属性
+- `"Authorization": f"Bearer {key}"` 后面**缺逗号** —— 由此引发 Pylance 连环三条：`"{" was not closed`、`Statements must be separated...`、`Expected expression`
+- `requests.post()` 括号空着 —— 地址、headers、json、timeout 全没传
+
+结论：骨架记住了（三个参数的位置都对），漏的都是逗号、等号、括号里的内容。**Pylance 一次报三条别慌，通常是同一处少了 `}` 或 `,`。**
+
+### 今天的疑问
+
+- 「sk 是什么」——secret key 的缩写，只是 key 的命名前缀，不用自己加，整串原样复制
+- 「环境变量是不是会越来越多」——会多，但不会撑爆；要么定期清，要么项目专属的改用 `.env`（记得挡住 `.gitignore`）
+- 「请求头这两行是什么意思」——`Authorization: Bearer <key>` 是身份，`Content-Type: application/json` 是「我送的是 JSON，你按这个解析」
+- 「这个报错是为什么」——编辑器里有一份没保存的版本，Pylance 报的第 30/32 行磁盘上根本不存在；先保存再看
+- 「代码放哪里、阶段二复盘还放 day1 吗」——是，复盘继续写进本文件；验证代码抄进复盘，文件本身留在 `eval/` 但不提交
+
+### 今天真正记住的几件事
+
+- **API key 等于银行卡密码**：不进聊天框、不进代码、不截图。要验证只问「设好了没有」
+- **`Bearer` 后面那个空格不能少**，这是协议规定的格式
+- **Pylance 连环报错往往只有一个根因**，先找哪个 `{` 没闭合、哪个 `,` 漏了
+- **跑通一次不等于学会了**，能脱稿默写出来才算；默写时漏掉的都是结构件
