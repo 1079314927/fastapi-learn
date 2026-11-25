@@ -14,6 +14,7 @@ for c in cases:
     print(f"题目的id是：{c['id']}，答案是{replies}。")
     verdict=judge(c,replies)
     result.append({"id":c["id"],
+                   "answer":replies[-1],
                 "verdict":verdict["verdict"],
                 "error_type":verdict["error_type"],
                 "reason":verdict["reason"]})
