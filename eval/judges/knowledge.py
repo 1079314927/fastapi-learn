@@ -10,7 +10,7 @@ import os
 from eval.llm_client import chat
 
 JUDGE_API_URL = "https://open.bigmodel.cn/api/paas/v4/chat/completions"
-JUDGE_MODEL = "glm-4-flash"
+JUDGE_MODEL = "glm-5.3-flash"
 
 JUDGE_SYSTEM_PROMPT = """你是评测判分员，不是老师，不给学生讲题。
 只判「知识点正确性」这一件事。步骤完整度、是否超纲、讲得深浅、措辞长短，都不在本维度扣分。

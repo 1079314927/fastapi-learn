@@ -1,0 +1,39 @@
+[
+    {
+        "id": "sc-001",
+        "turns": ["题面已知 x=-2 是方程 8-ax-b=3-2x 的解，求 3-4a+2b 的值。"],
+        "expect": "5",
+        "dimension": "step_consistency",
+        "question_type": "calc",
+        "canned_reply": "把 x=-2 代入方程，得 8+2a-b=3+4，即 2a-b=-1。把这个式子代进目标式，算得 3-4a+2b=5。",
+        "purpose": "judge_self_test"
+    },
+    {
+        "id": "sc-002",
+        "turns": ["小班教学，每间安排 20 人则缺 3 间教室；每间安排 24 人则空出 1 间。求教室数。"],
+        "expect": "21",
+        "dimension": "step_consistency",
+        "question_type": "word",
+        "canned_reply": "设教室 x 间，学生人数不变，所以 20(x+3)=24(x-1)。解得 x=21。答：21 间。",
+        "purpose": "judge_self_test"
+    },
+    {
+        "id": "sc-003",
+        "turns": ["定义新运算 x*y=x+y-xy。已知 [(-x)*(-2)]*2=2x，求 x。"],
+        "expect": "-4",
+        "dimension": "step_consistency",
+        "question_type": "calc",
+        "canned_reply": "先算内层：(-x)*(-2)=(-3x-2)。再与 2 运算：(-3x-2)*2=3x+4。所以 x=4。",
+        "purpose": "judge_self_test"
+    },
+    {
+        "id": "sc-004",
+        "turns": ["已知 x=-2 是方程 8-ax-b=3-2x 的解，求 3-4a+2b 的值。"],
+        "expect": "5",
+        "dimension": "step_consistency",
+        "question_type": "calc",
+        "canned_reply": "**第一步：代入**\n把 x = -2 代入方程：\n8 - a(-2) - b = 3 - 2(-2)\n8 + 2a - b = 7\n∴ 2a - b = -1\n\n**第二步：整体代入**\n将 2a - b = -1 整体代入目标式：\n3 - 4a + 2b = 5\n\n**答案：5**",
+        "purpose": "layout_check"
+    }
+
+]

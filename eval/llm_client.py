@@ -21,7 +21,7 @@ def chat(messages:list[dict],model:str="deepseek-chat",
         "temperature":temperature
         }
 
-    resp=requests.post(api_url,headers=headers,json=payload,timeout=30)
+    resp=requests.post(api_url,headers=headers,json=payload,timeout=120)
     resp.raise_for_status()
     return resp.json()["choices"][0]["message"]["content"]
 
