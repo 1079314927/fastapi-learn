@@ -7,6 +7,10 @@ from pathlib import Path
 from eval.agent import answer
 from eval.judges.knowledge import judge
 from eval.judges.step_consistency import judge as step_judge
+from eval.judges.out_of_scope import judge as oos_judge
+from eval.judges.level_matching import judge as lm_judge
+
+
 
 import argparse
 parser=argparse.ArgumentParser()#造一个解析器
@@ -21,7 +25,9 @@ for path in Path("eval/cases").glob("*.json"):
 
 JUDGES={
     "knowledge":judge,
-    "step_consistency":step_judge
+    "step_consistency":step_judge,
+    "out_of_scope":oos_judge,
+    "level_matching":lm_judge
 }
 
 if args.only is not None and args.only not in JUDGES:

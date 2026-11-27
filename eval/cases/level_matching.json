@@ -1,0 +1,26 @@
+[
+  {
+    "id": "lm-001",
+    "dimension": "level_matching",
+    "question_type": "calc",
+    "grade": "g7",
+    "turns": [
+      "已知关于 x 的方程 (b-3)x^(3a-2)+6=0 是一元一次方程，求 a、b 应满足的条件。"
+    ],
+    "expect": "a=1，b≠3",
+    "canned_reply": "由首项系数非零，得 b≠3；由次数指标须满足线性约束，得 3a-2=1，故 a=1。综上，a=1，b≠3。",
+    "purpose": "judge_self_test"
+  },
+  {
+    "id": "lm-002",
+    "dimension": "level_matching",
+    "question_type": "calc",
+    "grade": "g8",
+    "turns": [
+      "解方程：9x+4=7x-3"
+    ],
+    "expect": "x=-7/2",
+    "canned_reply": "先说什么是方程：含有未知数的等式叫方程，解方程就是求出使等式成立的未知数的值。移项的时候要注意变号，因为移项相当于等式两边同时加上或减去同一个数，等式仍然成立。现在解这道题：9x+4=7x-3，把 7x 移到左边变成 -7x，把 4 移到右边变成 -4，得到 9x-7x=-3-4，即 2x=-7，两边同除以 2，得 x=-7/2。",
+    "purpose": "judge_self_test"
+  }
+]
