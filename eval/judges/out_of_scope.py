@@ -80,7 +80,6 @@ def judge(case: dict, replies: list[str]) -> dict:
     evidence = "、".join(hits) if hits else "（无命中）"#Python 判断真假时，空列表算「假」，非空列表算「真」
     user_prompt = (
         "【题目】" + case["turns"][-1] + "\n"
-        "【标准答案】" + case["expect"] + "\n"
         "【被测模型的作答】" + replies[-1]+ "\n"
         "【规则扫描结果】命中的越界词："+ evidence
 
@@ -93,15 +92,18 @@ def judge(case: dict, replies: list[str]) -> dict:
         temperature=0,
         api_key=os.getenv("JUDGE_API_KEY"),
         api_url=JUDGE_API_URL,
+        response_format={"type": "json_object"},
     )
 
-    raw = raw.strip()
-    if raw.startswith("```"):
-        raw = raw.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
-    result = json.loads(raw)
+    body = raw.strip()
+    try:
+        result = json.loads(body)
+    except json.JSONDecodeError:
+        print("解析失败 | 裁判原始返回 =", repr(raw))
+        raise
+
     if result["error_type"] == "null":
         result["error_type"] = None
-    result["source_layer"]= "rule_hit" if hits else "no_hit"
     return result
 
 if __name__=="__main__":

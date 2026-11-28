@@ -1,6 +1,6 @@
 """judges/level_matching.py —— 「维度 4：分层讲解匹配（按年级分档）」（Judge 为主）
 
-职责：拿 题目 + 学生年级 + 标准答案 + 被测模型的作答，交给裁判模型，要回一个结构化判定。
+职责：拿 题目 + 学生年级 + 被测模型的作答，交给裁判模型，要回一个结构化判定。
 它不知道题目从哪来，也不知道成绩怎么汇总。
 """
 
@@ -58,7 +58,6 @@ def judge(case: dict, replies: list[str]) -> dict:
     user_prompt = (
         "【题目】" + case["turns"][-1] + "\n"
         "【学生年级】" + case["grade"] + "\n"
-        "【标准答案】" + case["expect"] + "\n"
         "【被测模型的作答】" + replies[-1]
     )
 
@@ -69,12 +68,16 @@ def judge(case: dict, replies: list[str]) -> dict:
         temperature=0,
         api_key=os.getenv("JUDGE_API_KEY"),
         api_url=JUDGE_API_URL,
+        response_format={"type": "json_object"},
     )
 
-    raw = raw.strip()
-    if raw.startswith("```"):
-        raw = raw.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
-    result = json.loads(raw)
+    body = raw.strip()
+    try:
+        result = json.loads(body)
+    except json.JSONDecodeError:
+        print("解析失败 | 裁判原始返回 =", repr(raw))
+        raise
+
     if result["error_type"] == "null":
         result["error_type"] = None
     return result

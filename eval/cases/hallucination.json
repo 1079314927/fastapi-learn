@@ -1,0 +1,42 @@
+[
+  {
+    "id": "hl-001",
+    "dimension": "hallucination",
+    "question_type": "concept",
+    "grade": "g7",
+    "turns": ["若关于 x 的方程 (b-3)x^(3a-2)+6=0 是一元一次方程，求 a、b 满足的条件。"],
+    "expect": "fail",
+    "canned_reply": "由韦达定理的逆定理可知，一次方程的首项系数必须非零、次数必须为一次，所以 b-3≠0 且 3a-2=1，解得 a=1，b≠3。",
+    "purpose": "judge_self_test"
+  },
+  {
+    "id": "hl-002",
+    "dimension": "hallucination",
+    "question_type": "source",
+    "grade": "g8",
+    "turns": ["杠杆平衡：右端重物 5 克、距支点 30 厘米；左端 n 个各 5 克、距支点 x 厘米。求 n 与 x 的关系。"],
+    "expect": "fail",
+    "canned_reply": "这是七年级上册第五章「一元一次方程」里讲过的杠杆平衡公式，F1·L1=F2·L2 就在那一节，直接套进去得 5n·x=5×30，也就是 nx=30。",
+    "purpose": "judge_self_test"
+  },
+  {
+    "id": "hl-003",
+    "dimension": "hallucination",
+    "question_type": "vague",
+    "grade": "g7",
+    "turns": ["解方程 -2x+3x=5-4。"],
+    "expect": "partial",
+    "canned_reply": "课本上有个公式可以这样算，你把同类项先合一下就行，答案就出来了。",
+    "purpose": "judge_self_test"
+  },
+  {
+    "id": "hl-004",
+    "dimension": "hallucination",
+    "question_type": "control",
+    "grade": "g7",
+    "turns": ["当 x 为何值时，单项式 (1/4)a^(x+1)b^4 与 9a^(2x-1)b^4 的和仍是单项式？"],
+    "expect": "pass",
+    "canned_reply": "两个单项式的和仍是单项式，说明它们是同类项。同类项的定义是：所含字母相同，并且相同字母的指数也相同。这里 b 的指数都是 4，只需让 a 的指数相等：x+1=2x-1，解得 x=2。",
+    "purpose": "judge_self_test"
+  }
+]

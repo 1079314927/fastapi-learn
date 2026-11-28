@@ -40,12 +40,16 @@ def judge(case: dict, replies: list[str]) -> dict:
         temperature=0,
         api_key=os.getenv("JUDGE_API_KEY"),
         api_url=JUDGE_API_URL,
+        response_format={"type": "json_object"},
     )
 
-    raw = raw.strip()
-    if raw.startswith("```"):
-        raw = raw.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
-    result = json.loads(raw)
+    body = raw.strip()
+    try:
+        result = json.loads(body)
+    except json.JSONDecodeError:
+        print("解析失败 | 裁判原始返回 =", repr(raw))
+        raise
+
     if result["error_type"] == "null":
         result["error_type"] = None
     return result

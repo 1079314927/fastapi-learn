@@ -7,7 +7,9 @@ import requests
 #类型注解不会检查你传的是不是真的列表
 API_URL="https://api.deepseek.com/chat/completions"
 def chat(messages:list[dict],model:str="deepseek-chat",
-         temperature=0.3, api_key:str|None = None,api_url: str = API_URL) -> str:
+         temperature=0.3, api_key:str|None = None,api_url: str = API_URL,
+         response_format: dict|None = None) -> str:
+
     if api_key is None:
         api_key=os.getenv("LLM_API_KEY")
         if not api_key:
@@ -20,6 +22,9 @@ def chat(messages:list[dict],model:str="deepseek-chat",
         "messages":messages,
         "temperature":temperature
         }
+    if response_format is not None:
+        payload["response_format"]=response_format
+
 
     resp=requests.post(api_url,headers=headers,json=payload,timeout=120)
     resp.raise_for_status()

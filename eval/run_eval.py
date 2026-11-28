@@ -9,6 +9,8 @@ from eval.judges.knowledge import judge
 from eval.judges.step_consistency import judge as step_judge
 from eval.judges.out_of_scope import judge as oos_judge
 from eval.judges.level_matching import judge as lm_judge
+from eval.judges.multi_turn import judge as mt_judge
+from eval.judges.hallucination import judge as hl_judge
 
 
 
@@ -27,7 +29,10 @@ JUDGES={
     "knowledge":judge,
     "step_consistency":step_judge,
     "out_of_scope":oos_judge,
-    "level_matching":lm_judge
+    "level_matching":lm_judge,
+    "multi_turn": mt_judge,
+    "hallucination":hl_judge
+
 }
 
 if args.only is not None and args.only not in JUDGES:
@@ -41,7 +46,9 @@ for c in cases:
         continue
 
     if "canned_reply" in c:
-        replies=[c["canned_reply"]]
+        raw=c["canned_reply"]
+        replies=raw if isinstance(raw, list) else [raw]
+
         print(f"固定答卷：{c['id']}")
     else:
         replies=answer(c["turns"])
